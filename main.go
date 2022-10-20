@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/limsanity/sing-pilot/dto"
 	"github.com/limsanity/sing-pilot/model"
 	"github.com/limsanity/sing-pilot/service"
 
@@ -31,13 +34,19 @@ func main() {
 	// initialize http server
 	router := gin.Default()
 
+	api := router.Group("/api")
+
 	// create config
-	router.POST("/config", func(ctx *gin.Context) {
-		config := model.Config{}
-		err := ctx.ShouldBindJSON(&config)
+	api.POST("/config", func(ctx *gin.Context) {
+		dto := dto.CreateConfigDto{}
+		err := ctx.ShouldBindJSON(&dto)
 		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 			return
+		}
+
+		config := model.Config{
+			Content: dto.Content,
 		}
 
 		if result := db.Create(&config); result.Error != nil {
@@ -48,8 +57,29 @@ func main() {
 		ctx.JSON(http.StatusCreated, gin.H{"message": "success"})
 	})
 
+	// update config
+	api.PATCH("/config", func(ctx *gin.Context) {
+		var dto dto.PatchConfigDto
+		err := ctx.ShouldBindJSON(&dto)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+
+		var config model.Config
+		if result := db.First(&config, dto.ID); result.Error != nil {
+			ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+			return
+		}
+
+		config.Content = dto.Content
+		db.Save(&config)
+
+		ctx.JSON(http.StatusCreated, gin.H{"message": "success"})
+	})
+
 	// get all config
-	router.GET("/config", func(ctx *gin.Context) {
+	api.GET("/config", func(ctx *gin.Context) {
 		var configList []model.Config
 		if result := db.Find(&configList); result.Error != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
@@ -59,19 +89,61 @@ func main() {
 		ctx.JSON(http.StatusOK, gin.H{"result": configList})
 	})
 
+	// delete config
+	api.DELETE("/config/:id", func(ctx *gin.Context) {
+		dto := &dto.DeleteConfigDto{}
+		err := ctx.ShouldBindUri(&dto)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+
+		if result := db.Delete(&model.Config{}, dto.ID); result.Error != nil {
+			ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
 	// restart sing-box
-	router.POST("/sing_box/restart", func(ctx *gin.Context) {
+	api.POST("/sing_box/restart", func(ctx *gin.Context) {
+		var dto dto.RestartDto
+		err := ctx.ShouldBindJSON(&dto)
+		if err == nil && dto.ConfigId != nil {
+			var config model.Config
+			if result := db.First(&config, *dto.ConfigId); result.Error != nil {
+				ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+				return
+			}
+
+			file := "tmp/" + fmt.Sprint(config.ID) + ".json"
+			fd, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY, 0644)
+			defer func() {
+				if err := fd.Close(); err != nil {
+					log.Fatal(err)
+				}
+			}()
+
+			if err != nil {
+				ctx.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
+				return
+			}
+
+			fd.WriteString(config.Content)
+		}
+
 		sb.Stop()
 		sb.Start()
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 
-	router.POST("/sing_box/start", func(ctx *gin.Context) {
+	api.POST("/sing_box/start", func(ctx *gin.Context) {
 		sb.Start()
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 
-	router.POST("/sing_box/stop", func(ctx *gin.Context) {
+	api.POST("/sing_box/stop", func(ctx *gin.Context) {
 		sb.Stop()
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
