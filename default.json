@@ -1,0 +1,10 @@
+{
+  "inbounds": [
+    {
+      "type": "mixed",
+      "listen": "::",
+      "listen_port": 2080
+    }
+  ],
+  "outbounds": []
+}

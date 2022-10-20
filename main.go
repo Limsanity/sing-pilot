@@ -15,13 +15,15 @@ import (
 	"gorm.io/gorm"
 )
 
+var cf = "default.json"
+
 const (
 	DB_FILE = "sing_pilot.db"
 )
 
 func main() {
 	sb := service.SingBox{}
-	sb.Start()
+	sb.Start(cf)
 
 	// initialize db
 	db, err := gorm.Open(sqlite.Open(DB_FILE), &gorm.Config{})
@@ -131,15 +133,16 @@ func main() {
 			}
 
 			fd.WriteString(config.Content)
+			cf = file
 		}
 
 		sb.Stop()
-		sb.Start()
+		sb.Start(cf)
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 
 	api.POST("/sing_box/start", func(ctx *gin.Context) {
-		sb.Start()
+		sb.Start(cf)
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 

@@ -28,13 +28,13 @@ func (sb *SingBox) Stop() {
 	sb.cmd = nil
 }
 
-func (sb *SingBox) Start() {
+func (sb *SingBox) Start(cf string) {
 	if sb.cmd != nil {
 		return
 	}
 
 	// run sing-box
-	args := []string{"run"}
+	args := []string{"run", "-c", cf}
 	sb.cmd = exec.Command(SING_BOX, args...)
 
 	// log sing-box stdout
