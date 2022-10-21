@@ -28,12 +28,6 @@ func main() {
 	db.AutoMigrate(&model.UserConfig{})
 
 	sp := service.NewSingPilotService(db)
-
-	userConfig := model.UserConfig{}
-	if result := db.First(&userConfig); result.Error == nil {
-		sp.UseFile(userConfig.ConfigId)
-	}
-
 	sp.Start()
 
 	// initialize http server
@@ -123,6 +117,8 @@ func main() {
 				return
 			}
 
+			var userConfig model.UserConfig
+			db.First(&userConfig)
 			userConfig.ConfigId = *dto.ConfigId
 			db.Save(&userConfig)
 		}

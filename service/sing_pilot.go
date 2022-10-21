@@ -23,10 +23,17 @@ type SingPilot struct {
 }
 
 func NewSingPilotService(db *gorm.DB) SingPilot {
-	return SingPilot{
+	sp := SingPilot{
 		db:   db,
 		file: DEFAULT_CONFIG,
 	}
+
+	var userConfig model.UserConfig
+	if result := db.First(&userConfig); result.Error == nil {
+		sp.UseFile(userConfig.ConfigId)
+	}
+
+	return sp
 }
 
 func (sp *SingPilot) UseFile(id uint) error {
