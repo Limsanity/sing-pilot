@@ -14,30 +14,27 @@ import (
 )
 
 const (
-	DB_FILE        = "sing_pilot.db"
-	DEFAULT_CONFIG = "default.json"
+	DB_FILE = "sing_pilot.db"
 )
 
 func main() {
-
 	// initialize db
 	db, err := gorm.Open(sqlite.Open(DB_FILE), &gorm.Config{})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	db.AutoMigrate(&model.Config{})
 	db.AutoMigrate(&model.UserConfig{})
 
-	cf := service.NewConfigService(DEFAULT_CONFIG, db)
+	sp := service.NewSingPilotService(db)
 
 	userConfig := model.UserConfig{}
 	if result := db.First(&userConfig); result.Error == nil {
-		cf.UseFile(userConfig.ConfigId)
+		sp.UseFile(userConfig.ConfigId)
 	}
 
-	sb := service.NewSingBoxService()
-	sb.Start(cf.GetFile())
+	sp.Start()
 
 	// initialize http server
 	router := gin.Default()
@@ -121,7 +118,7 @@ func main() {
 		var dto dto.RestartDto
 		err := ctx.ShouldBindJSON(&dto)
 		if err == nil && dto.ConfigId != nil {
-			if err := cf.UseFile(*dto.ConfigId); err != nil {
+			if err := sp.UseFile(*dto.ConfigId); err != nil {
 				ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 				return
 			}
@@ -130,18 +127,18 @@ func main() {
 			db.Save(&userConfig)
 		}
 
-		sb.Stop()
-		sb.Start(cf.GetFile())
+		sp.Stop()
+		sp.Start()
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 
 	singBoxApi.POST("/start", func(ctx *gin.Context) {
-		sb.Start(cf.GetFile())
+		sp.Start()
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 
 	singBoxApi.POST("/stop", func(ctx *gin.Context) {
-		sb.Stop()
+		sp.Stop()
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 
