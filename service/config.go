@@ -4,13 +4,33 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/limsanity/sing-pilot/model"
+	"gorm.io/gorm"
 )
 
 type Config struct {
-	File string
+	file string
+	db   *gorm.DB
 }
 
-func (c *Config) UseFile(id uint, content string) error {
+func NewConfigService(file string, db *gorm.DB) Config {
+	return Config{
+		file: file,
+		db:   db,
+	}
+}
+
+func (c *Config) GetFile() string {
+	return c.file
+}
+
+func (c *Config) UseFile(id uint) error {
+	config := model.Config{}
+	if result := c.db.First(&config); result.Error != nil {
+		return result.Error
+	}
+
 	file := fmt.Sprint("tmp/", id, ".json")
 	fd, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY, 0644)
 	defer func() {
@@ -23,13 +43,13 @@ func (c *Config) UseFile(id uint, content string) error {
 		return err
 	}
 
-	_, err = fd.WriteString(content)
+	_, err = fd.WriteString(config.Content)
 
 	if err != nil {
 		return err
 	}
 
-	c.File = file
+	c.file = file
 
 	return nil
 }

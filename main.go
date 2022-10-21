@@ -29,20 +29,15 @@ func main() {
 	db.AutoMigrate(&model.Config{})
 	db.AutoMigrate(&model.UserConfig{})
 
-	cf := service.Config{File: DEFAULT_CONFIG}
+	cf := service.NewConfigService(DEFAULT_CONFIG, db)
 
 	userConfig := model.UserConfig{}
 	if result := db.First(&userConfig); result.Error == nil {
-		config := model.Config{}
-		if result := db.First(&config); result.Error == nil {
-			if err := cf.UseFile(config.ID, config.Content); err != nil {
-				log.Fatal(err)
-			}
-		}
+		cf.UseFile(userConfig.ConfigId)
 	}
 
-	sb := service.SingBox{}
-	sb.Start(cf.File)
+	sb := service.NewSingBoxService()
+	sb.Start(cf.GetFile())
 
 	// initialize http server
 	router := gin.Default()
@@ -53,7 +48,7 @@ func main() {
 
 	// create config
 	singBoxApi.POST("/config", func(ctx *gin.Context) {
-		dto := dto.CreateConfigDto{}
+		var dto dto.CreateConfigDto
 		err := ctx.ShouldBindJSON(&dto)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -65,7 +60,7 @@ func main() {
 		}
 
 		if result := db.Create(&config); result.Error != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message": result.Error.Error()})
 			return
 		}
 
@@ -83,7 +78,7 @@ func main() {
 
 		var config model.Config
 		if result := db.First(&config, dto.ID); result.Error != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message": result.Error.Error()})
 			return
 		}
 
@@ -97,7 +92,7 @@ func main() {
 	singBoxApi.GET("/config", func(ctx *gin.Context) {
 		var configList []model.Config
 		if result := db.Find(&configList); result.Error != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message": result.Error.Error()})
 			return
 		}
 
@@ -106,7 +101,7 @@ func main() {
 
 	// delete config
 	singBoxApi.DELETE("/config/:id", func(ctx *gin.Context) {
-		dto := &dto.DeleteConfigDto{}
+		var dto dto.DeleteConfigDto
 		err := ctx.ShouldBindUri(&dto)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
@@ -114,7 +109,7 @@ func main() {
 		}
 
 		if result := db.Delete(&model.Config{}, dto.ID); result.Error != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message": result.Error.Error()})
 			return
 		}
 
@@ -126,28 +121,22 @@ func main() {
 		var dto dto.RestartDto
 		err := ctx.ShouldBindJSON(&dto)
 		if err == nil && dto.ConfigId != nil {
-			var config model.Config
-			if result := db.First(&config, *dto.ConfigId); result.Error != nil {
-				ctx.JSON(http.StatusBadGateway, gin.H{"message": result.Error.Error()})
+			if err := cf.UseFile(*dto.ConfigId); err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 				return
 			}
 
-			if err := cf.UseFile(config.ID, config.Content); err != nil {
-				ctx.JSON(http.StatusBadGateway, gin.H{"message": err.Error()})
-				return
-			}
-
-			userConfig.ConfigId = config.ID
+			userConfig.ConfigId = *dto.ConfigId
 			db.Save(&userConfig)
 		}
 
 		sb.Stop()
-		sb.Start(cf.File)
+		sb.Start(cf.GetFile())
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 
 	singBoxApi.POST("/start", func(ctx *gin.Context) {
-		sb.Start(cf.File)
+		sb.Start(cf.GetFile())
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	})
 

@@ -14,6 +14,10 @@ type SingBox struct {
 	cmd *exec.Cmd
 }
 
+func NewSingBoxService() SingBox {
+	return SingBox{}
+}
+
 func (sb *SingBox) Stop() {
 	if sb.cmd == nil {
 		return
@@ -28,13 +32,13 @@ func (sb *SingBox) Stop() {
 	sb.cmd = nil
 }
 
-func (sb *SingBox) Start(cf string) {
+func (sb *SingBox) Start(file string) {
 	if sb.cmd != nil {
 		return
 	}
 
 	// run sing-box
-	args := []string{"run", "-c", cf}
+	args := []string{"run", "-c", file}
 	sb.cmd = exec.Command(SING_BOX, args...)
 
 	// log sing-box stdout
